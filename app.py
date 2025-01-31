@@ -3,14 +3,35 @@ from streamlit_option_menu import option_menu
 import numpy as np
 import joblib
 import os
+import warnings
+warnings.filterwarnings('ignore')
 
-# Load the models and scalers
-diabetes_model = joblib.load('diabetespred_model.sav')
-heart_disease_model = joblib.load('heartdisease_model.sav')
-parkinsons_model = joblib.load( 'parkinsons_model.sav')
-diabetes_scaler = joblib.load( 'diabetes_scaler.sav')
-heart_scaler = joblib.load( 'heart_scaler.sav')
-parkinsons_scaler = joblib.load( 'parkinsons_scaler.sav')
+# Add version check and model loading with error handling
+try:
+    # Load models with explicit error handling
+    def safe_load_model(model_path):
+        try:
+            return joblib.load(model_path)
+        except Exception as e:
+            st.error(f"Error loading model from {model_path}")
+            return None
+
+    diabetes_model = safe_load_model('diabetespred_model.sav')
+    heart_disease_model = safe_load_model('heartdisease_model.sav')
+    parkinsons_model = safe_load_model('parkinsons_model.sav')
+    diabetes_scaler = safe_load_model('diabetes_scaler.sav')
+    heart_scaler = safe_load_model('heart_scaler.sav')
+    parkinsons_scaler = safe_load_model('parkinsons_scaler.sav')
+
+    # Verify models are loaded
+    if not all([diabetes_model, heart_disease_model, parkinsons_model,
+                diabetes_scaler, heart_scaler, parkinsons_scaler]):
+        st.error("Some models failed to load. Please check your model files.")
+        st.stop()
+
+except Exception as e:
+    st.error(f"Error during initialization: {str(e)}")
+    st.stop()
 
 # sidebar for navigation
 with st.sidebar:
@@ -20,6 +41,16 @@ with st.sidebar:
                            'Parkinsons Prediction'],
                           icons=['activity', 'heart', 'person'],
                           default_index=0)
+
+# Update the prediction functions
+def make_prediction(model, scaler, features):
+    try:
+        features_scaled = scaler.transform([features])
+        prediction = model.predict(features_scaled)
+        return prediction[0]
+    except Exception as e:
+        st.error(f"Error during prediction: {str(e)}")
+        return None
 
 # Diabetes Prediction Page
 if selected == 'Diabetes Prediction':
@@ -64,16 +95,10 @@ if selected == 'Diabetes Prediction':
                          float(SkinThickness), float(Insulin), float(BMI), 
                          float(DiabetesPedigreeFunction), float(Age)]
             
-            # Scale the features
-            features_scaled = diabetes_scaler.transform([user_input])
-            diab_prediction = diabetes_model.predict(features_scaled)
-            
-            if diab_prediction[0] == 1:
-                diab_diagnosis = 'The person is diabetic'
-            else:
-                diab_diagnosis = 'The person is not diabetic'
-            
-            st.success(diab_diagnosis)
+            result = make_prediction(diabetes_model, diabetes_scaler, user_input)
+            if result is not None:
+                diab_diagnosis = 'The person is diabetic' if result == 1 else 'The person is not diabetic'
+                st.success(diab_diagnosis)
         except ValueError:
             st.error("Please enter valid numerical values for all fields")
 
