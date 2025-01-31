@@ -4,12 +4,12 @@ import numpy as np
 import joblib
 
 # Load the models and scalers (simplified path handling)
-diabetes_model = joblib.load('models/diabetespred_model.sav')
-heart_disease_model = joblib.load('models/heartdisease_model.sav')
-parkinsons_model = joblib.load('models/parkinsons_model.sav')
-diabetes_scaler = joblib.load('models/diabetes_scaler.sav')
-heart_scaler = joblib.load('models/heart_scaler.sav')
-parkinsons_scaler = joblib.load('models/parkinsons_scaler.sav')
+diabetes_model = joblib.load('diabetespred_model.sav')
+heart_disease_model = joblib.load('heartdisease_model.sav')
+parkinsons_model = joblib.load('parkinsons_model.sav')
+diabetes_scaler = joblib.load('diabetes_scaler.sav')
+heart_scaler = joblib.load('heart_scaler.sav')
+parkinsons_scaler = joblib.load('parkinsons_scaler.sav')
 
 
 # sidebar for navigation
