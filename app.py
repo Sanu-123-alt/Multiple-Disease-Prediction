@@ -6,51 +6,59 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# Custom prediction wrapper
-class ModelWrapper:
+# Direct prediction wrapper
+class LegacyModelWrapper:
     def __init__(self, model):
         self.model = model
+        # Store core model attributes
+        self.n_classes_ = getattr(model, 'n_classes_', 2)
+        self.classes_ = getattr(model, 'classes_', np.array([0, 1]))
+        self.tree_ = getattr(model, 'tree_', None)
     
     def predict(self, X):
-        """Direct prediction bypassing version checks"""
-        if hasattr(self.model, 'predict_proba'):
-            proba = self.model.predict_proba(X)
-            return np.argmax(proba, axis=1)
-        return self.model._predict(X)
+        # Direct prediction using decision tree
+        if hasattr(self.model, 'tree_'):
+            return self.model.tree_.predict(X)
+        # Fallback to original predict
+        return self.model.predict(X)
 
-# Modified safe load model function
 def safe_load_model(model_path):
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            model = joblib.load(model_path)
-            return ModelWrapper(model)
+        base_model = joblib.load(model_path)
+        return LegacyModelWrapper(base_model)
     except Exception as e:
-        st.error(f"Error loading model from {model_path}")
+        st.error(f"Error loading model: {str(e)}")
         return None
 
-# Modified prediction function
 def make_prediction(model, scaler, features):
     try:
-        features_scaled = scaler.transform([features])
-        prediction = model.predict(features_scaled)
-        return prediction[0]
+        # Ensure features are in the correct format
+        features_array = np.array(features).reshape(1, -1)
+        # Scale features
+        features_scaled = scaler.transform(features_array)
+        # Make prediction
+        raw_prediction = model.predict(features_scaled)
+        # Ensure we get a single prediction value
+        return int(raw_prediction[0] if isinstance(raw_prediction, (list, np.ndarray)) else raw_prediction)
     except Exception as e:
-        st.error(f"Error during prediction: {str(e)}")
+        st.error(f"Prediction error: {str(e)}")
         return None
 
-# Load models
+# Load models with new wrapper
 try:
-    diabetes_model = safe_load_model('diabetespred_model.sav')
-    heart_disease_model = safe_load_model('heartdisease_model.sav')
-    parkinsons_model = safe_load_model('parkinsons_model.sav')
-    diabetes_scaler = joblib.load('diabetes_scaler.sav')
-    heart_scaler = joblib.load('heart_scaler.sav')
-    parkinsons_scaler = joblib.load('parkinsons_scaler.sav')
+    models_dir = os.path.dirname(os.path.abspath(__file__))
+    diabetes_model = safe_load_model(os.path.join(models_dir, 'diabetespred_model.sav'))
+    heart_disease_model = safe_load_model(os.path.join(models_dir, 'heartdisease_model.sav'))
+    parkinsons_model = safe_load_model(os.path.join(models_dir, 'parkinsons_model.sav'))
+    
+    # Load scalers normally
+    diabetes_scaler = joblib.load(os.path.join(models_dir, 'diabetes_scaler.sav'))
+    heart_scaler = joblib.load(os.path.join(models_dir, 'heart_scaler.sav'))
+    parkinsons_scaler = joblib.load(os.path.join(models_dir, 'parkinsons_scaler.sav'))
 
     if not all([diabetes_model, heart_disease_model, parkinsons_model,
                 diabetes_scaler, heart_scaler, parkinsons_scaler]):
-        st.error("Some models failed to load. Please check your model files.")
+        st.error("Failed to load one or more models/scalers")
         st.stop()
 
 except Exception as e:
