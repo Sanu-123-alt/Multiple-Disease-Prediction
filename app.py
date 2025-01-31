@@ -6,64 +6,68 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# Direct prediction wrapper
-class LegacyModelWrapper:
+class SimpleModelWrapper:
     def __init__(self, model):
         self.model = model
-        # Store core model attributes
-        self.n_classes_ = getattr(model, 'n_classes_', 2)
-        self.classes_ = getattr(model, 'classes_', np.array([0, 1]))
-        self.tree_ = getattr(model, 'tree_', None)
     
     def predict(self, X):
-        # Direct prediction using decision tree
-        if hasattr(self.model, 'tree_'):
-            return self.model.tree_.predict(X)
-        # Fallback to original predict
-        return self.model.predict(X)
+        """Simplified prediction that bypasses version checks"""
+        try:
+            # Try using the model's predict method directly
+            return np.array([int(p) for p in self.model.predict(X)])
+        except:
+            try:
+                # Fallback to predict_proba if available
+                proba = self.model.predict_proba(X)
+                return np.array([1 if p[1] >= 0.5 else 0 for p in proba])
+            except:
+                # Last resort: try accessing decision function
+                return np.array([1 if p >= 0 else 0 for p in self.model.decision_function(X)])
 
-def safe_load_model(model_path):
+def load_model_safe(path):
+    """Safely load and wrap the model"""
     try:
-        base_model = joblib.load(model_path)
-        return LegacyModelWrapper(base_model)
+        model = joblib.load(path)
+        return SimpleModelWrapper(model)
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
+        st.error(f"Error loading model from {path}: {str(e)}")
         return None
 
-def make_prediction(model, scaler, features):
-    try:
-        # Ensure features are in the correct format
-        features_array = np.array(features).reshape(1, -1)
-        # Scale features
-        features_scaled = scaler.transform(features_array)
-        # Make prediction
-        raw_prediction = model.predict(features_scaled)
-        # Ensure we get a single prediction value
-        return int(raw_prediction[0] if isinstance(raw_prediction, (list, np.ndarray)) else raw_prediction)
-    except Exception as e:
-        st.error(f"Prediction error: {str(e)}")
-        return None
-
-# Load models with new wrapper
+# Load models with simplified wrapper
 try:
-    models_dir = os.path.dirname(os.path.abspath(__file__))
-    diabetes_model = safe_load_model(os.path.join(models_dir, 'diabetespred_model.sav'))
-    heart_disease_model = safe_load_model(os.path.join(models_dir, 'heartdisease_model.sav'))
-    parkinsons_model = safe_load_model(os.path.join(models_dir, 'parkinsons_model.sav'))
+    diabetes_model = load_model_safe('diabetespred_model.sav')
+    heart_disease_model = load_model_safe('heartdisease_model.sav')
+    parkinsons_model = load_model_safe('parkinsons_model.sav')
     
-    # Load scalers normally
-    diabetes_scaler = joblib.load(os.path.join(models_dir, 'diabetes_scaler.sav'))
-    heart_scaler = joblib.load(os.path.join(models_dir, 'heart_scaler.sav'))
-    parkinsons_scaler = joblib.load(os.path.join(models_dir, 'parkinsons_scaler.sav'))
+    # Load scalers directly (no wrapper needed)
+    diabetes_scaler = joblib.load('diabetes_scaler.sav')
+    heart_scaler = joblib.load('heart_scaler.sav')
+    parkinsons_scaler = joblib.load('parkinsons_scaler.sav')
 
     if not all([diabetes_model, heart_disease_model, parkinsons_model,
                 diabetes_scaler, heart_scaler, parkinsons_scaler]):
-        st.error("Failed to load one or more models/scalers")
+        st.error("Failed to load models or scalers")
         st.stop()
 
 except Exception as e:
     st.error(f"Initialization error: {str(e)}")
     st.stop()
+
+def make_prediction(model, scaler, features):
+    """Simplified prediction function"""
+    try:
+        # Scale features
+        scaled_features = scaler.transform([features])
+        # Get prediction
+        prediction = model.predict(scaled_features)
+        # Return first prediction value
+        return int(prediction[0])
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
+        st.error("Model details for debugging:")
+        st.error(f"Model type: {type(model)}")
+        st.error(f"Features shape: {np.array(features).shape}")
+        return None
 
 # sidebar for navigation
 with st.sidebar:
