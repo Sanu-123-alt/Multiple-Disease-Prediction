@@ -4,30 +4,39 @@ import numpy as np
 import joblib
 import os
 import warnings
-from sklearn import __version__ as sklearn_version
 warnings.filterwarnings('ignore')
 
-# Add version compatibility fixes
-def make_prediction_compatible(model, features):
-    """Wrapper to handle different scikit-learn versions"""
-    try:
-        # Direct prediction approach
-        return model.predict(features)
-    except AttributeError:
-        # Fallback for newer scikit-learn versions
-        if hasattr(model, 'classes_'):
-            probas = model.predict_proba(features)
-            return model.classes_[np.argmax(probas, axis=1)]
-        raise
+# Custom prediction wrapper
+class ModelWrapper:
+    def __init__(self, model):
+        self.model = model
+    
+    def predict(self, X):
+        """Direct prediction bypassing version checks"""
+        if hasattr(self.model, 'predict_proba'):
+            proba = self.model.predict_proba(X)
+            return np.argmax(proba, axis=1)
+        return self.model._predict(X)
 
-# Load models with explicit error handling
+# Modified safe load model function
 def safe_load_model(model_path):
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            return joblib.load(model_path)
+            model = joblib.load(model_path)
+            return ModelWrapper(model)
     except Exception as e:
         st.error(f"Error loading model from {model_path}")
+        return None
+
+# Modified prediction function
+def make_prediction(model, scaler, features):
+    try:
+        features_scaled = scaler.transform([features])
+        prediction = model.predict(features_scaled)
+        return prediction[0]
+    except Exception as e:
+        st.error(f"Error during prediction: {str(e)}")
         return None
 
 # Load models
@@ -35,27 +44,14 @@ try:
     diabetes_model = safe_load_model('diabetespred_model.sav')
     heart_disease_model = safe_load_model('heartdisease_model.sav')
     parkinsons_model = safe_load_model('parkinsons_model.sav')
-    diabetes_scaler = safe_load_model('diabetes_scaler.sav')
-    heart_scaler = safe_load_model('heart_scaler.sav')
-    parkinsons_scaler = safe_load_model('parkinsons_scaler.sav')
+    diabetes_scaler = joblib.load('diabetes_scaler.sav')
+    heart_scaler = joblib.load('heart_scaler.sav')
+    parkinsons_scaler = joblib.load('parkinsons_scaler.sav')
 
-    # Verify models are loaded
     if not all([diabetes_model, heart_disease_model, parkinsons_model,
                 diabetes_scaler, heart_scaler, parkinsons_scaler]):
         st.error("Some models failed to load. Please check your model files.")
         st.stop()
-
-    def make_prediction(model, scaler, features):
-        try:
-            features_scaled = scaler.transform([features])
-            prediction = make_prediction_compatible(model, features_scaled)
-            return prediction[0]
-        except Exception as e:
-            st.error(f"Error during prediction: {str(e)}")
-            return None
-
-    # Display scikit-learn version info
-    st.sidebar.info(f"scikit-learn version: {sklearn_version}")
 
 except Exception as e:
     st.error(f"Initialization error: {str(e)}")
