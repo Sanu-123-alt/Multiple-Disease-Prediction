@@ -11,63 +11,75 @@ class SimpleModelWrapper:
         self.model = model
     
     def predict(self, X):
-        """Simplified prediction that bypasses version checks"""
+        """Simplified prediction that works with RandomForestClassifier"""
         try:
-            # Try using the model's predict method directly
-            return np.array([int(p) for p in self.model.predict(X)])
+            # First try predict_proba (preferred for RandomForest)
+            proba = self.model.predict_proba(X)
+            return np.array([1 if p[1] >= 0.5 else 0 for p in proba])
         except:
             try:
-                # Fallback to predict_proba if available
-                proba = self.model.predict_proba(X)
-                return np.array([1 if p[1] >= 0.5 else 0 for p in proba])
-            except:
-                # Last resort: try accessing decision function
-                return np.array([1 if p >= 0 else 0 for p in self.model.decision_function(X)])
+                # Fallback to direct predict
+                return np.array([int(p) for p in self.model.predict(X)])
+            except Exception as e:
+                st.error(f"Prediction failed: {str(e)}")
+                return np.array([0])  # Return safe default
 
 def load_model_safe(path):
     """Safely load and wrap the model"""
     try:
-        model = joblib.load(path)
-        return SimpleModelWrapper(model)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = joblib.load(path)
+            return SimpleModelWrapper(model)
     except Exception as e:
         st.error(f"Error loading model from {path}: {str(e)}")
         return None
 
-# Load models with simplified wrapper
-try:
-    diabetes_model = load_model_safe('diabetespred_model.sav')
-    heart_disease_model = load_model_safe('heartdisease_model.sav')
-    parkinsons_model = load_model_safe('parkinsons_model.sav')
-    
-    # Load scalers directly (no wrapper needed)
-    diabetes_scaler = joblib.load('diabetes_scaler.sav')
-    heart_scaler = joblib.load('heart_scaler.sav')
-    parkinsons_scaler = joblib.load('parkinsons_scaler.sav')
-
-    if not all([diabetes_model, heart_disease_model, parkinsons_model,
-                diabetes_scaler, heart_scaler, parkinsons_scaler]):
-        st.error("Failed to load models or scalers")
-        st.stop()
-
-except Exception as e:
-    st.error(f"Initialization error: {str(e)}")
-    st.stop()
-
 def make_prediction(model, scaler, features):
-    """Simplified prediction function"""
+    """Simplified prediction function with better error handling"""
     try:
+        # Convert features to numpy array and reshape
+        features_array = np.array(features).reshape(1, -1)
         # Scale features
-        scaled_features = scaler.transform([features])
+        scaled_features = scaler.transform(features_array)
         # Get prediction
         prediction = model.predict(scaled_features)
         # Return first prediction value
         return int(prediction[0])
     except Exception as e:
         st.error(f"Prediction error: {str(e)}")
-        st.error("Model details for debugging:")
-        st.error(f"Model type: {type(model)}")
-        st.error(f"Features shape: {np.array(features).shape}")
+        st.error(f"Input features shape: {np.array(features).shape}")
         return None
+
+# Load models
+try:
+    models_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Load models and scalers from the same directory as the script
+    model_files = {
+        'diabetes': ('diabetespred_model.sav', 'diabetes_scaler.sav'),
+        'heart': ('heartdisease_model.sav', 'heart_scaler.sav'),
+        'parkinsons': ('parkinsons_model.sav', 'parkinsons_scaler.sav')
+    }
+    
+    # Load all models
+    diabetes_model = load_model_safe(os.path.join(models_dir, model_files['diabetes'][0]))
+    heart_disease_model = load_model_safe(os.path.join(models_dir, model_files['heart'][0]))
+    parkinsons_model = load_model_safe(os.path.join(models_dir, model_files['parkinsons'][0]))
+    
+    # Load scalers
+    diabetes_scaler = joblib.load(os.path.join(models_dir, model_files['diabetes'][1]))
+    heart_scaler = joblib.load(os.path.join(models_dir, model_files['heart'][1]))
+    parkinsons_scaler = joblib.load(os.path.join(models_dir, model_files['parkinsons'][1]))
+
+    if not all([diabetes_model, heart_disease_model, parkinsons_model,
+                diabetes_scaler, heart_scaler, parkinsons_scaler]):
+        st.error("Failed to load one or more models/scalers")
+        st.stop()
+
+except Exception as e:
+    st.error(f"Initialization error: {str(e)}")
+    st.stop()
 
 # sidebar for navigation
 with st.sidebar:
