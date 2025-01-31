@@ -5,13 +5,12 @@ import joblib
 import os
 
 # Load the models and scalers
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-diabetes_model = joblib.load(os.path.join(current_dir, 'diabetespred_model.sav'))
-heart_disease_model = joblib.load(os.path.join(current_dir, 'heartdisease_model.sav'))
-parkinsons_model = joblib.load(os.path.join(current_dir, 'parkinsons_model.sav'))
-diabetes_scaler = joblib.load(os.path.join(current_dir, 'diabetes_scaler.sav'))
-heart_scaler = joblib.load(os.path.join(current_dir, 'heart_scaler.sav'))
-parkinsons_scaler = joblib.load(os.path.join(current_dir, 'parkinsons_scaler.sav'))
+diabetes_model = joblib.load('diabetespred_model.sav')
+heart_disease_model = joblib.load('heartdisease_model.sav')
+parkinsons_model = joblib.load( 'parkinsons_model.sav')
+diabetes_scaler = joblib.load( 'diabetes_scaler.sav')
+heart_scaler = joblib.load( 'heart_scaler.sav')
+parkinsons_scaler = joblib.load( 'parkinsons_scaler.sav')
 
 # sidebar for navigation
 with st.sidebar:
