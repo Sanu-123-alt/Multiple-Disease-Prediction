@@ -4,18 +4,34 @@ import numpy as np
 import joblib
 import os
 import warnings
+from sklearn import __version__ as sklearn_version
 warnings.filterwarnings('ignore')
 
-# Add version check and model loading with error handling
-try:
-    # Load models with explicit error handling
-    def safe_load_model(model_path):
-        try:
-            return joblib.load(model_path)
-        except Exception as e:
-            st.error(f"Error loading model from {model_path}")
-            return None
+# Add version compatibility fixes
+def make_prediction_compatible(model, features):
+    """Wrapper to handle different scikit-learn versions"""
+    try:
+        # Direct prediction approach
+        return model.predict(features)
+    except AttributeError:
+        # Fallback for newer scikit-learn versions
+        if hasattr(model, 'classes_'):
+            probas = model.predict_proba(features)
+            return model.classes_[np.argmax(probas, axis=1)]
+        raise
 
+# Load models with explicit error handling
+def safe_load_model(model_path):
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return joblib.load(model_path)
+    except Exception as e:
+        st.error(f"Error loading model from {model_path}")
+        return None
+
+# Load models
+try:
     diabetes_model = safe_load_model('diabetespred_model.sav')
     heart_disease_model = safe_load_model('heartdisease_model.sav')
     parkinsons_model = safe_load_model('parkinsons_model.sav')
@@ -29,8 +45,20 @@ try:
         st.error("Some models failed to load. Please check your model files.")
         st.stop()
 
+    def make_prediction(model, scaler, features):
+        try:
+            features_scaled = scaler.transform([features])
+            prediction = make_prediction_compatible(model, features_scaled)
+            return prediction[0]
+        except Exception as e:
+            st.error(f"Error during prediction: {str(e)}")
+            return None
+
+    # Display scikit-learn version info
+    st.sidebar.info(f"scikit-learn version: {sklearn_version}")
+
 except Exception as e:
-    st.error(f"Error during initialization: {str(e)}")
+    st.error(f"Initialization error: {str(e)}")
     st.stop()
 
 # sidebar for navigation
@@ -41,16 +69,6 @@ with st.sidebar:
                            'Parkinsons Prediction'],
                           icons=['activity', 'heart', 'person'],
                           default_index=0)
-
-# Update the prediction functions
-def make_prediction(model, scaler, features):
-    try:
-        features_scaled = scaler.transform([features])
-        prediction = model.predict(features_scaled)
-        return prediction[0]
-    except Exception as e:
-        st.error(f"Error during prediction: {str(e)}")
-        return None
 
 # Diabetes Prediction Page
 if selected == 'Diabetes Prediction':
