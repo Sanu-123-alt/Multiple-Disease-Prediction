@@ -9,23 +9,23 @@ warnings.filterwarnings('ignore')
 class SimpleModelWrapper:
     def __init__(self, model):
         self.model = model
+        # Store the original model
+        self.base_model = model.base_estimator if hasattr(model, 'base_estimator') else model
     
     def predict(self, X):
-        """Simplified prediction that works silently"""
+        """Direct prediction using underlying model"""
+        # Try getting the raw prediction from the base model
         try:
-            # Try direct prediction first
-            return self.model.predict(X)
+            raw_prediction = self.model.predict(X)
+            # Ensure we return the actual predicted class
+            return raw_prediction.astype(int)
         except:
-            # If direct prediction fails, try predict_proba silently
             try:
+                # Fallback to probability-based prediction
                 proba = self.model.predict_proba(X)
-                return np.array([1 if p[1] >= 0.5 else 0 for p in proba])
+                return (proba[:, 1] > 0.5).astype(int)
             except:
-                # If all else fails, use the underlying estimator directly
-                try:
-                    return np.array([self.model._predict(X)])
-                except:
-                    return np.array([0])  # Last resort fallback
+                return np.array([0])
 
 def load_model_safe(path):
     """Safely load and wrap the model"""
@@ -39,19 +39,20 @@ def load_model_safe(path):
         return None
 
 def make_prediction(model, scaler, features):
-    """Simplified prediction function with better error handling"""
+    """Updated prediction function"""
     try:
-        # Convert features to numpy array and reshape
-        features_array = np.array(features).reshape(1, -1)
+        # Convert and reshape features
+        features_array = np.array(features, dtype=float).reshape(1, -1)
         # Scale features
         scaled_features = scaler.transform(features_array)
         # Get prediction
-        prediction = model.predict(scaled_features)
-        # Return first prediction value
-        return int(prediction[0])
+        raw_prediction = model.predict(scaled_features)
+        # Debug output
+        st.sidebar.write("Debug - Raw prediction:", raw_prediction)
+        # Return the actual predicted class
+        return int(raw_prediction[0])
     except Exception as e:
         st.error(f"Prediction error: {str(e)}")
-        st.error(f"Input features shape: {np.array(features).shape}")
         return None
 
 # Load models
