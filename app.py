@@ -6,51 +6,50 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-class SimpleModelWrapper:
-    def __init__(self, model):
-        self.model = model
-        # Store the original model
-        self.base_model = model.base_estimator if hasattr(model, 'base_estimator') else model
-    
-    def predict(self, X):
-        """Direct prediction using underlying model"""
-        # Try getting the raw prediction from the base model
-        try:
-            raw_prediction = self.model.predict(X)
-            # Ensure we return the actual predicted class
-            return raw_prediction.astype(int)
-        except:
-            try:
-                # Fallback to probability-based prediction
-                proba = self.model.predict_proba(X)
-                return (proba[:, 1] > 0.5).astype(int)
-            except:
-                return np.array([0])
+def unwrap_model(model):
+    """Get the underlying model from any wrapper/ensemble"""
+    if hasattr(model, 'estimators_'):
+        return model.estimators_[0]  # For random forests, get first tree
+    if hasattr(model, 'base_estimator'):
+        return model.base_estimator  # For other ensembles
+    return model  # Return as-is if no wrapper detected
 
 def load_model_safe(path):
-    """Safely load and wrap the model"""
+    """Load model without wrapping"""
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            model = joblib.load(path)
-            return SimpleModelWrapper(model)
+        model = joblib.load(path)
+        # Print model type for debugging
+        st.sidebar.write(f"Loaded model type: {type(model)}")
+        return model  # Return the model directly
     except Exception as e:
-        st.error(f"Error loading model from {path}: {str(e)}")
+        st.error(f"Error loading model: {str(e)}")
         return None
 
 def make_prediction(model, scaler, features):
-    """Updated prediction function"""
+    """Direct prediction function"""
     try:
-        # Convert and reshape features
+        # Convert features to numpy array
         features_array = np.array(features, dtype=float).reshape(1, -1)
+        
         # Scale features
         scaled_features = scaler.transform(features_array)
-        # Get prediction
-        raw_prediction = model.predict(scaled_features)
-        # Debug output
-        st.sidebar.write("Debug - Raw prediction:", raw_prediction)
-        # Return the actual predicted class
-        return int(raw_prediction[0])
+        
+        # Make prediction
+        if hasattr(model, 'predict_proba'):
+            # Use probability prediction
+            proba = model.predict_proba(scaled_features)
+            st.sidebar.write("Prediction probabilities:", proba[0])
+            prediction = 1 if proba[0][1] >= 0.5 else 0
+        else:
+            # Direct prediction
+            prediction = model.predict(scaled_features)[0]
+        
+        # Debug information
+        st.sidebar.write("Raw features shape:", features_array.shape)
+        st.sidebar.write("Scaled features:", scaled_features[0])
+        st.sidebar.write("Final prediction:", prediction)
+        
+        return int(prediction)
     except Exception as e:
         st.error(f"Prediction error: {str(e)}")
         return None
